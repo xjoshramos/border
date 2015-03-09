@@ -26,6 +26,7 @@ def random_walk(energy):
 
 			x = random.choice(min_energy)
 			#print min_index, min_value, energy_neighbors, neighbors[min_index], neighbors, min_energy
+		#draw path in blue
 		im[i,x] = (255,0,0)
 		path.append((i,x))
 		energy_total += energy[i,x]
@@ -34,11 +35,6 @@ def random_walk(energy):
 	#print path, energy_total
 	cv2.imshow("walk", im)
 	
-
-
-
-
-
 	return path, energy_total
 
 
@@ -57,12 +53,24 @@ abs_grad_x = cv2.convertScaleAbs(sobel_x);
 energy = cv2.addWeighted(abs_grad_y, 0.5, abs_grad_x, 0.5, 0)
 
 
-k = 0
-while k<(2):
-	k += 1
-	path, energy_tot = random_walk(energy)
+path = []
+iter_random_path = 0
+while iter_random_path < 2:
+	if not path:
+		path, energy_tot = random_walk(energy)
+	else:
+		next_path, next_energy_tot = random_walk(energy)
+		if energy_tot > next_energy_tot:
+			path = next_path
+			energy_tot = next_energy_tot
+		
 	print path, energy_tot
+	iter_random_path += 1
 
+for point in path:
+        im[point] = (0,255,0)
+
+cv2.imshow('min path',im)
 cv2.imshow('grad',energy)
 
 k = cv2.waitKey(0)
