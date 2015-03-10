@@ -8,9 +8,9 @@ def random_walk(energy):
 	path = []
 	height, width = energy.shape[:2]
 	x = random.randint(0, width-1)
-	val = energy[0,x]
+	val = 0 #energy[0,x]
 	
-	path.append((0,x))	
+	path.append(x)	
 	
 	energy_total = val
 	for i in range(1,height-1):
@@ -28,7 +28,7 @@ def random_walk(energy):
 			#print min_index, min_value, energy_neighbors, neighbors[min_index], neighbors, min_energy
 		#draw path in blue
 		#im[i,x] = (255,0,0)
-		path.append((i,x))
+		path.append(x)
 		energy_total += energy[i,x]
 
 
@@ -57,7 +57,7 @@ def min_path(energy):
 	path = []
 	iter_random_path = 0
 
-	while iter_random_path < 200:
+	while iter_random_path < 50:
         	if not path:
                 	path, energy_tot = random_walk(energy)
         	else:
@@ -75,26 +75,46 @@ def min_path(energy):
 def crop(im):
 	energy = image_energy(im)
 	path = min_path(energy)
-	crop = im
-	for point in path:
-		
-	#crop = im
-
+	height, width = im.shape[:2]
+	crop = np.zeros((height,width-1,3), np.uint8)
+	print width, height, len(path)
+	for h in range(0,height-1):
+		for w in range(0,width-1):
+			#print path[h], len(path)	
+			#print pt_w, pt_h
+			if w < path[h]:
+				#print path[y], 
+				crop[h,w] = im[h,w]
+			if w >= path[h]:
+				crop[h,w] = im[h,w+1]
+			#if w == path[h]:
+				#cl = im[h,w]
+				#cr = im[h,w+1]
+				#cn =( (cl[0] + cr[0])/2, (cl[1] + cr[1])/2, (cl[2] + cr[2])/2 )
+				#crop[h,w] = cn
+				
+			#else:
+				
 	#for point in path:
-        #	im[point] = (0,255,0)
+		#pth, ptw = point
+        	#crop[pth,ptw] = (0,255,0)
 
 	#cv2.imshow('min path',im)
 	#cv2.imshow('grad',energy)
+	#cv2.imshow('crop',crop)
 
 	return crop
 
-im = cv2.imread('bordered5.jpg')
-#cv2.imshow('houghlines',im)
+im = cv2.imread('seamCarve1.jpg')
+cv2.imshow('original',im)
+height, width = im.shape[:2]
 cropped = im
 iter_crop = 0
-while iter_crop < 10:
+while iter_crop < 200:
 
 	cropped = crop(cropped)
+	
+	cv2.imshow('crop',cropped)
 	iter_crop += 1
 
 k = cv2.waitKey(0)
