@@ -75,9 +75,11 @@ def min_path(energy):
 def crop(im):
 	energy = image_energy(im)
 	path = min_path(energy)
+	pathimg = im
 	height, width = im.shape[:2]
 	crop = np.zeros((height,width-1,3), np.uint8)
-	print width, height, len(path)
+	#pathimg = crop
+	print width-1, height, len(path)
 	for h in range(0,height-1):
 		for w in range(0,width-1):
 			#print path[h], len(path)	
@@ -87,6 +89,7 @@ def crop(im):
 				crop[h,w] = im[h,w]
 			if w >= path[h]:
 				crop[h,w] = im[h,w+1]
+			pathimg[h,path[h]] = (0,255,0)
 			#if w == path[h]:
 				#cl = im[h,w]
 				#cr = im[h,w+1]
@@ -96,12 +99,12 @@ def crop(im):
 			#else:
 				
 	#for point in path:
-		#pth, ptw = point
-        	#crop[pth,ptw] = (0,255,0)
+	#	pth, ptw = point
+        #	pathimg[ptw,pth] = (0,255,0)
 
 	#cv2.imshow('min path',im)
 	#cv2.imshow('grad',energy)
-	#cv2.imshow('crop',crop)
+	cv2.imshow('dfsdf',pathimg)
 
 	return crop
 
@@ -110,11 +113,12 @@ cv2.imshow('original',im)
 height, width = im.shape[:2]
 cropped = im
 iter_crop = 0
-while iter_crop < 200:
+while iter_crop < width:
 
 	cropped = crop(cropped)
 	
 	cv2.imshow('crop',cropped)
+	cv2.waitKey(0)
 	iter_crop += 1
 
 k = cv2.waitKey(0)
