@@ -4,14 +4,8 @@ import sys
 import random
 
 def filter_preprocess(im):
-	pre_processed_img = im
-	#bilateral_img = cv2.bilateralFilter(im, 11, 25, 25)
-        #pre_processed_img = cv2.bilateralFilter(im, 11, 150, 150)
+	#pre_processed_img = im
 	pre_processed_img = cv2.bilateralFilter(im, 35, 100, 100)
-	#blur = cv2.blur(pre_processed_img,(5,5))
-	#pre_processed_img = cv2.addWeighted(pre_processed_img, 1.5, blur, -0.5, 0)
-
-	#pre_processed_img = cv2.medianBlur(pre_processed_img, 3)	
 	return pre_processed_img
 def mser_region_mask(im):
 	
@@ -21,6 +15,7 @@ def mser_region_mask(im):
 
 	mask_regions = np.zeros((h, w), np.uint8)
 	mser = cv2.MSER(8, 50, 500, 0.25, 0.01, 100, 1.01, 0.03, 5)
+	#mser = cv2.MSER(8, 10, 2000, 0.25, 0.01, 100, 1.01, 0.03, 5)
 	
 	#r,g,b = cv2.split(im)
 	#regions_r = mser.detect(r, None)
@@ -66,11 +61,33 @@ def grow_edges(gray, edge_mser_inter):
 
 	cv2.cartToPolar(grad_x, grad_y, grad_mag, grad_dir, True)
 	
-	#for y in range(0,h):
-		#grad_dir
-		#grad_ptr = grad_dir
 	
 	return gradient_grown
+
+def solidity_contour(contour):
+	area = cv2.contourArea(contour)
+        hull = cv2.convexHull(contour)
+        hull_area = cv2.contourArea(hull)
+        if hull_area > 0:
+		s = float(area)/hull_area
+	else:
+		s = 0
+	return s
+
+def eccentricity_contour(contour):
+	
+	if len(contour) > 5:
+
+		ellipse = cv2.fitEllipse(contour)
+                center, axes, orientation = ellipse
+                majoraxis_len = max(axes)
+                minoraxis_len = min(axes)
+                if majoraxis_len > 0:
+			e = np.sqrt(1-(minoraxis_len/majoraxis_len)**2)
+	else: 
+		e = 1
+
+	return e
 
 def filter_hiserstic(bw_img):
 	
@@ -78,31 +95,22 @@ def filter_hiserstic(bw_img):
 	filtered_img = np.zeros((h, w), np.uint8)
 	contours, hierarchy = cv2.findContours(img,cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
 	
-	solidity = 0
-	eccentricity = 1
-	#.995
 	for cnt in contours:
 		area = cv2.contourArea(cnt)
-		hull = cv2.convexHull(cnt)
-		hull_area = cv2.contourArea(hull)
-		if hull_area > 0:
-			solidity = float(area)/hull_area
-		if len(cnt) > 5:
-			ellipse = cv2.fitEllipse(cnt)
-			center, axes, orientation = ellipse
-			majoraxis_len =	max(axes)
-			minoraxis_len = min(axes)
-			if majoraxis_len > 0:
-				eccentricity = np.sqrt(1-(minoraxis_len/majoraxis_len)**2)
-		if( area > 50 and area < 500 and eccentricity < .983 and solidity > .4):
+		solidity = solidity_contour(cnt)
+		eccentricity = eccentricity_contour(cnt)
+		
+		if( area > 50 and area < 600 and eccentricity < 0.983 and eccentricity > 0.1 and solidity > 0.4):
 			cv2.drawContours(filtered_img,[cnt],-1,255,-1)
 
 	return filtered_img
 
 def stroke_to_width_transform(bw_img):
 	width_list = []
-
-	return width_list
+	dist_img = cv2.distanceTransform( bw_img, cv2.cv.CV_DIST_L2, 3 );
+	norm_dist_img = dist_img
+	cv2.normalize(norm_dist_img, norm_dist_img, 0.0, 1.0, cv2.NORM_MINMAX);
+	return norm_dist_img
 
 #im   = cv2.imread('tesseract1.jpg')
 im   = cv2.imread('text1.png')
@@ -112,7 +120,7 @@ cv2.imshow('original',im)
 im = filter_preprocess(im)
 
 gray = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
-edges = cv2.Canny(gray, 100, 300)
+edges = cv2.Canny(gray, 20, 100)
 mser_region_img = mser_region_mask(im)
 edge_mser_inter = cv2.bitwise_and(edges, mser_region_img)
 
@@ -126,12 +134,16 @@ edge_enhanced_mser = mser_region_img
 hFilter_img = filter_hiserstic(edge_enhanced_mser)
 hFilter_img = cv2.bitwise_and(hFilter_img, mser_region_img)
 
+# stroke to width transform
+distance_img = stroke_to_width_transform(hFilter_img)
+
 
 cv2.imshow('mser region', edge_mser_inter)
 cv2.imshow('filtered',hFilter_img)
 cv2.imshow('regions', mser_region_img)
 cv2.imshow('preprocessed', im)
 cv2.imshow('final candidtates', hFilter_img)
+cv2.imshow('distance', distance_img)
 
 k = cv2.waitKey(0)
 #if k == 27:
