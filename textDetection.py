@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import sys
 import random
+import math
 
 def filter_preprocess(im):
 	#pre_processed_img = im
@@ -99,17 +100,53 @@ def filter_hiserstic(bw_img):
 		area = cv2.contourArea(cnt)
 		solidity = solidity_contour(cnt)
 		eccentricity = eccentricity_contour(cnt)
-		
+		contour_img = np.zeros((h, w), np.uint8)
 		if( area > 50 and area < 600 and eccentricity < 0.983 and eccentricity > 0.1 and solidity > 0.4):
-			cv2.drawContours(filtered_img,[cnt],-1,255,-1)
+			#cv2.drawContours(filtered_img,[cnt],-1,255,-1)
+			cv2.drawContours(contour_img,[cnt],-1,255,-1)
+			dist_img = stroke_to_width_transform(contour_img)
+			r = cv2.boundingRect(cnt)
+                	roi = dist_img[r[1]:r[1]+r[3], r[0]:r[0]+r[2]]
+                	stroke_mean = roi.mean()
+			h1, w1 = roi.shape[:2]
+			count = 0
+			mean_sum = 0
+			for x in range(0,h1-1):
+                                for y in range(0,w1-1):
+					if roi[x,y] > 0:
+						count += 1
+						mean_sum += roi[x,y]
+			if count > 0:
+				stroke_mean = mean_sum/count
+			accum = 0
+			for x in range(0,h1-1):
+				for y in range(0,w1-1):
+					if roi[x,y] > 0:
+						accum += (roi[x,y] - stroke_mean)*( roi[x,y] - stroke_mean)
+			if count > 0:
+				std_dev_stroke = np.sqrt(accum/count)
+			std_dev_mean_ratio = std_dev_stroke/stroke_mean
+			if std_dev_mean_ratio < .6:
+				cv2.drawContours(filtered_img,[cnt],-1,255,-1)
+			print stroke_mean, std_dev_mean_ratio
+			#cv2.waitKey(1000)
+                	cv2.imshow("sub", roi)			
+
+
 
 	return filtered_img
 
 def stroke_to_width_transform(bw_img):
 	width_list = []
-	dist_img = cv2.distanceTransform( bw_img, cv2.cv.CV_DIST_L2, 3 );
+	dist_img = cv2.distanceTransform( bw_img, cv2.cv.CV_DIST_L2, 3 )
+	minVal, maxVal, minLoc, maxLoc = cv2.minMaxLoc(dist_img)
+	stroke_Radius = math.ceil(maxVal/2)
+	kernel = cv2.getStructuringElement(cv2.MORPH_RECT,(3,3))
+	
+	for j in range(0,int(stroke_Radius)):
+		dist_img = cv2.dilate(dist_img,kernel,iterations = 1)
 	norm_dist_img = dist_img
-	cv2.normalize(norm_dist_img, norm_dist_img, 0.0, 1.0, cv2.NORM_MINMAX);
+	#cv2.normalize(norm_dist_img, norm_dist_img, 0.0, 1.0, cv2.NORM_MINMAX);
 	return norm_dist_img
 
 #im   = cv2.imread('tesseract1.jpg')
