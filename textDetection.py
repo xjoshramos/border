@@ -10,35 +10,9 @@ def filter_preprocess(im):
 	return pre_processed_img
 def mser_region_mask(im):
 	
-	#mask_r = np.zeros((h, w), np.uint8)
-	#mask_g = np.zeros((h, w), np.uint8)
-	#mask_b = np.zeros((h, w), np.uint8)
 
 	mask_regions = np.zeros((h, w), np.uint8)
-	mser = cv2.MSER(8, 50, 500, 0.25, 0.01, 100, 1.01, 0.03, 5)
-	#mser = cv2.MSER(8, 10, 2000, 0.25, 0.01, 100, 1.01, 0.03, 5)
-	
-	#r,g,b = cv2.split(im)
-	#regions_r = mser.detect(r, None)
-	#regions_g = mser.detect(g, None)
-	#regions_b = mser.detect(b, None)	
-
-	#for p_r in regions_r:
-        #        for pts in p_r:
-        #                x, y = pts
-        #                mask_r[y,x] = 255
-	
-	#for p_g in regions_g:
-        #        for pts in p_g:
-        #                x, y = pts
-        #                mask_g[y,x] = 255
-
-	#for p_b in regions_b:
-        #        for pts in p_b:
-        #                x, y = pts
-        #                mask_b[y,x] = 255
-	#mask_regions = cv2.bitwise_and(mask_g, mask_r)
-	#mask_regions = cv2.bitwise_and(mask_b, mask_regions)
+	mser = cv2.MSER(8, 25, 500, 0.25, 0.01, 100, 1.01, 0.03, 5)
 	
 	gray = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)	
 	regions = mser.detect(gray, None)
@@ -50,20 +24,36 @@ def mser_region_mask(im):
 
 	return mask_regions
 
-def grow_edges(gray, edge_mser_inter):
-	gradient_grown = gray	
-	grad_x = cv2.Sobel(gray,cv2.CV_32F,1,0)
-        grad_y = cv2.Sobel(gray,cv2.CV_32F,0,1)
-	
-	grad_mag = grad_x
-	grad_dir = grad_x
-	#grad_mag = np.zeros((h, w), cv2.CV_32F)
-	#grad_dir = np.zeros((h, w), cv2.CV_32F)
+def gradient_img(gray):
 
-	cv2.cartToPolar(grad_x, grad_y, grad_mag, grad_dir, True)
+	sobel_x = cv2.Sobel(gray,cv2.CV_64F,1,0,ksize=3)
+        sobel_y = cv2.Sobel(gray,cv2.CV_64F,0,1,ksize=3)
+
+        #abs_grad_y = cv2.convertScaleAbs(sobel_y);
+        #abs_grad_x = cv2.convertScaleAbs(sobel_x);
+
+        #energy = cv2.addWeighted(abs_grad_y, 0.5, abs_grad_x, 0.5, 0)	
+	energy = cv2.magnitude(sobel_x, sobel_y)
+	phase  = cv2.phase(sobel_x, sobel_y)
+	#energy = energy/300
+	cv2.normalize(energy, energy, 0.0, 1.0, cv2.NORM_MINMAX);
+	#cv2.cartToPolar(grad_x, grad_y, grad_mag, grad_dir, True)
 	
+	return energy, phase
+
+def aspect_ratio_contour(contour):
 	
-	return gradient_grown
+	x,y,w,h = cv2.boundingRect(cnt)
+	aspect_ratio = float(w)/h
+	return aspect_ratio
+
+def extent_contour(contour):
+
+	area = cv2.contourArea(contour)
+	x,y,w,h = cv2.boundingRect(contour)
+	rect_area = w*h
+	extent = float(area)/rect_area
+	return extent
 
 def solidity_contour(contour):
 	area = cv2.contourArea(contour)
@@ -89,70 +79,145 @@ def eccentricity_contour(contour):
 		e = 1
 
 	return e
+def mean_std_dev(rect_img, area):
+	h1, w1 = rect_img.shape[:2]
+	count = 0
+	mean_sum = 0
+	mean = 0
+	std_dev = 1
+	ratio = 0
+	for x in range(0, h1 -1):
+		for y in range(0, w1 - 1):
+			if rect_img[x,y] > 0:
+				count += 1
+				mean_sum += rect_img[x,y]
+	if count > 0:
+		mean = mean_sum/count
+		
+	accum = 0
+        for x in range(0,h1-1):
+        	for y in range(0,w1-1):
+			if rect_img[x,y] > 0:
+				accum += (rect_img[x,y] - mean)*( rect_img[x,y] - mean)
+        if count > 0:
+		std_dev= np.sqrt(accum/count)
+        if mean > 0:
+		ratio = std_dev/mean
+	
+	#data = cv2.meanStdDev(rect_img)
+	#mean_cv, std_d_cv = data
+	#ratio_i = std_d_cv/mean_cv
+	#print mean_cv, std_d_cv, ratio_i
+	
+	return mean, std_dev, ratio 
+
+def grad_stw(bw_img, contour, bw_mask):
+	stw_mag = []
+	grad_mag, grad_dir = gradient_img(bw_img)
+	cv2.imshow("grad ient", grad_mag)
+	k = 0
+	contour = np.vstack(contour).squeeze()
+	for pt in contour:
+		stroke_width = 0
+		#pt = contour.pop(0)
+		x1, y1 =  pt
+		#print pt, x1, y1
+		#x1 = 0
+		#y1 = 0
+		diff = 2
+		color_lo = gray[y1,x1] - diff
+		color_hi = gray[y1,x1] + diff
+                theta = grad_dir[y1,x1]*math.pi/180.0
+		for length in range(0,50):
+			x2 = x1 + length * math.cos(theta)
+			y2 = y1 + length * math.sin(theta)
+			if y2 < w-1 and x2 < h-1:
+				if gray[y2,x2] < color_lo or gray[y2,x2] > color_hi:
+					stw_mag.append(stroke_width)
+					break
+			stroke_width += 1
+		#print stw_mag
+	counter = 0
+	mu = 0
+	acc = 0
+	ratio_check = 1
+	for i in stw_mag:
+		counter += 1
+		mu += i
+	if counter > 0:
+		mu = float(mu)/counter
+	for i in stw_mag:
+		acc += (i - mu)*(i - mu)
+	if counter > 0:
+		std_stw = np.sqrt(acc/counter)
+	if mu > 0:
+		ratio_check = float(std_stw)/mu
+	
+	print mu, std_stw, ratio_check		
+	return ratio_check
 
 def filter_hiserstic(bw_img):
-	
+	#bw_img = gray	
 	img = bw_img.copy()	
 	filtered_img = np.zeros((h, w), np.uint8)
-	contours, hierarchy = cv2.findContours(img,cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
+	contours, hierarchy = cv2.findContours(img,cv2.RETR_LIST,cv2.CHAIN_APPROX_NONE)
 	
 	for cnt in contours:
+		#for pt in cnt:
+			#print pt
 		area = cv2.contourArea(cnt)
+		cir_radius = np.sqrt(area/np.pi)
 		solidity = solidity_contour(cnt)
 		eccentricity = eccentricity_contour(cnt)
 		contour_img = np.zeros((h, w), np.uint8)
-		if( area > 50 and area < 600 and eccentricity < 0.983 and eccentricity > 0.1 and solidity > 0.4):
+		#if area > 0:
+		if area > 50 and area < 600 and eccentricity < 0.983 and eccentricity > 0.1 and solidity > 0.4:
 			#cv2.drawContours(filtered_img,[cnt],-1,255,-1)
-			cv2.drawContours(contour_img,[cnt],-1,255,-1)
-			dist_img = stroke_to_width_transform(contour_img)
-			r = cv2.boundingRect(cnt)
-                	roi = dist_img[r[1]:r[1]+r[3], r[0]:r[0]+r[2]]
-                	stroke_mean = roi.mean()
-			h1, w1 = roi.shape[:2]
-			count = 0
-			mean_sum = 0
-			for x in range(0,h1-1):
-                                for y in range(0,w1-1):
-					if roi[x,y] > 0:
-						count += 1
-						mean_sum += roi[x,y]
-			if count > 0:
-				stroke_mean = mean_sum/count
-			accum = 0
-			for x in range(0,h1-1):
-				for y in range(0,w1-1):
-					if roi[x,y] > 0:
-						accum += (roi[x,y] - stroke_mean)*( roi[x,y] - stroke_mean)
-			if count > 0:
-				std_dev_stroke = np.sqrt(accum/count)
-			std_dev_mean_ratio = std_dev_stroke/stroke_mean
-			if std_dev_mean_ratio < .6:
-				cv2.drawContours(filtered_img,[cnt],-1,255,-1)
-			print stroke_mean, std_dev_mean_ratio
-			#cv2.waitKey(1000)
-                	cv2.imshow("sub", roi)			
+			cv2.drawContours(contour_img,[cnt],-1,1,-1)
+			#cv2.bitwise_and(gray,contour_img,mask = contour_img)
+			contour_mask = cv2.bitwise_and(contour_img, mser_region_img)
+			contour_img = gray*contour_mask
+			ratio_check = grad_stw(contour_img, cnt, contour_mask)
+			
 
+			dist_img, max_value = stroke_to_width_transform(contour_mask)
+			
+			r = cv2.boundingRect(cnt)
+                	roi = dist_img[r[1]:r[1]+r[3], r[0]:r[0]+r[2]]	
+			mean_img, std_dev_img,std_dev_mean_ratio = mean_std_dev(roi, area)
+			print ratio_check
+			#if std_dev_mean_ratio < 0.20:
+			if ratio_check < 0.06 and ratio_check > .05:
+				cv2.drawContours(filtered_img,[cnt],-1,255,-1)
+			
+			#print mean_img, std_dev_img, std_dev_mean_ratio
+                	cv2.imshow("contour segment", contour_img)			
+			#cv2.waitKey(500)
 
 
 	return filtered_img
 
 def stroke_to_width_transform(bw_img):
 	width_list = []
-	dist_img = cv2.distanceTransform( bw_img, cv2.cv.CV_DIST_L2, 3 )
+	float32_img = np.zeros((h, w), np.float32)
+	float32_img = bw_img
+	dist_img = cv2.distanceTransform( float32_img, cv2.cv.CV_DIST_L2, 3 )
 	minVal, maxVal, minLoc, maxLoc = cv2.minMaxLoc(dist_img)
 	stroke_Radius = math.ceil(maxVal/2)
 	kernel = cv2.getStructuringElement(cv2.MORPH_RECT,(3,3))
 	
 	for j in range(0,int(stroke_Radius)):
 		dist_img = cv2.dilate(dist_img,kernel,iterations = 1)
+	dist_img = dist_img*bw_img/255
 	norm_dist_img = dist_img
 	#cv2.normalize(norm_dist_img, norm_dist_img, 0.0, 1.0, cv2.NORM_MINMAX);
-	return norm_dist_img
+	return norm_dist_img, maxVal
 
-#im   = cv2.imread('tesseract1.jpg')
-im   = cv2.imread('text1.png')
+im   = cv2.imread('tesseract1.jpg')
+#im   = cv2.imread('text1.png')
+#im   = cv2.imread('text2.png')
 h, w = im.shape[:2]
-cv2.imshow('original',im)
+#cv2.imshow('original',im)
 
 im = filter_preprocess(im)
 
@@ -175,12 +240,12 @@ hFilter_img = cv2.bitwise_and(hFilter_img, mser_region_img)
 distance_img = stroke_to_width_transform(hFilter_img)
 
 
-cv2.imshow('mser region', edge_mser_inter)
-cv2.imshow('filtered',hFilter_img)
-cv2.imshow('regions', mser_region_img)
-cv2.imshow('preprocessed', im)
+#cv2.imshow('mser region', edge_mser_inter)
+#cv2.imshow('filtered',hFilter_img)
+#cv2.imshow('regions', mser_region_img)
+#cv2.imshow('preprocessed', im)
 cv2.imshow('final candidtates', hFilter_img)
-cv2.imshow('distance', distance_img)
+#cv2.imshow('distance', distance_img)
 
 k = cv2.waitKey(0)
 #if k == 27:
