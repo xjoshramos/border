@@ -157,9 +157,9 @@ def grad_stw(bw_img, contour, bw_mask):
 				#print im[y1,x1,0]
 				if y2 < w-1 and x2 < h-1:
 					debug[y2,x2] = 100
-					cv2.imshow("drawing",debug)
+					#cv2.imshow("drawing",debug)
                                 	#cv2.imshow("bw_mask", bw_mask)
-                                	cv2.waitKey(250) 
+                                	#cv2.waitKey(1) 
 					#if im[y2,x2,0] < r_lo or im[y2,x2,0] > r_hi or im[y2,x2,1] < g_lo or im[y2,x2,1] > g_hi or im[y2,x2,2] < b_lo or im[y2,x2,2] > b_hi:
 					#if bw_img[y2,x2] < color_lo or bw_img[y2,x2] > color_hi :
 					if bw_img[y2,x2] == 0:
@@ -167,17 +167,23 @@ def grad_stw(bw_img, contour, bw_mask):
 						phase_diff = (180.0*phase_diff)/np.pi
 						if phase_diff > 95.0 and phase_diff < 275:
 							distance = round(np.sqrt((y1-y2)*(y1-y2) + (x1-x2)*(x1-x2)))
-							print phase_diff, distance
+							#print phase_diff, distance
 							stroke_swipe.append(distance)
-							print stroke_swipe
+							#print stroke_swipe
 						break
 				
 			#stroke_swipe.append(stroke_wdth)
+		if not stroke_swipe:
+			continue
+		#if stroke_swipe != None:
 		s_w = min(stroke_swipe)
-		print s_w
+		#print s_w
 		stw_mag.append(s_w)
 		
 	#print stw_mag
+	if not stw_mag:
+		ratio_check = 1
+		return ratio_check
 	stw_mag = normalize(stw_mag)
 	#print stw_mag
 	mu = sum(stw_mag)/float(len(stw_mag))
@@ -222,7 +228,7 @@ def filter_hiserstic(bw_img):
 			mean_img, std_dev_img,std_dev_mean_ratio = mean_std_dev(roi, area)
 			print ratio_check, ratio_check, ratio_check, ratio_check, ratio_check
 			#if std_dev_mean_ratio < 0.1: #.2
-			if ratio_check < 0.5:
+			if ratio_check < 0.40:
 				cv2.drawContours(filtered_img,[cnt],-1,255,-1)
 			
 			#print mean_img, std_dev_img, std_dev_mean_ratio
@@ -248,8 +254,8 @@ def stroke_to_width_transform(bw_img):
 	#cv2.normalize(norm_dist_img, norm_dist_img, 0.0, 1.0, cv2.NORM_MINMAX);
 	return norm_dist_img, maxVal
 
-#im   = cv2.imread('tesseract1.jpg')
-im   = cv2.imread('text1.png')
+im   = cv2.imread('tesseract1.jpg')
+#im   = cv2.imread('text1.png')
 #debug = im.copy()
 #im   = cv2.imread('text2.png')
 h, w = im.shape[:2]
